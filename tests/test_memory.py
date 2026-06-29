@@ -1,12 +1,23 @@
-import pytest
-from agent.memory import SQLiteMemoryStore
+import os
+import unittest
+from memory import PersistentMemory
 
-def test_memory_persistence(tmp_path):
-    db_path = f"sqlite:///{tmp_path}/memory.db"
-    store = SQLiteMemoryStore(db_path)
-    store.add_message("sess1", "user", "Hello")
-    store.add_message("sess1", "assistant", "Hi")
-    history = store.get_history("sess1")
-    assert len(history) == 2
-    assert history[0]["role"] == "user"
-    assert history[0]["content"] == "Hello"
+class TestPersistentMemory(unittest.TestCase):
+    def setUp(self):
+        self.db_path = "test_memory.db"
+        if os.path.exists(self.db_path):
+            os.remove(self.db_path)
+        self.mem = PersistentMemory(db_path=self.db_path)
+
+    def tearDown(self):
+        if os.path.exists(self.db_path):
+            os.remove(self.db_path)
+
+    def test_add_and_get(self):
+        self.mem.add_message("user", "Hello")
+        self.mem.add_message("assistant", "Hi")
+        msgs = self.mem.get_recent_messages(limit=2)
+        self.assertEqual(msgs, [("user", "Hello"), ("assistant", "Hi")])
+
+if __name__ == "__main__":
+    unittest.main()

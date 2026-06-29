@@ -1,73 +1,90 @@
-# LangChain Agent with Memory and Confirmation
+# Agent with Persistent Memory and Confirmation
 
-This project demonstrates a LangChain agent that:
-- Persists conversation history in a SQLite database.
-- Asks for user confirmation before executing any tool.
-- Integrates simple tools (calculator and dummy web search).
+This project demonstrates a simple conversational agent built with LangChain that:
+- Stores conversation history persistently using SQLite.
+- Retrieves recent context before generating responses.
+- Requests user confirmation before executing critical actions (e.g., sending messages, changing settings).
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| **Persistent Memory** | Conversation history is stored in `memory.db` and loaded on each interaction. |
+| **Context Retrieval** | The last 5 messages are included in the prompt to the LLM. |
+| **Confirmation Workflow** | Critical actions are identified and the user is prompted before execution. |
+| **Auto-Confirm** | Set `auto_confirm=True` in `SimpleAgent` to bypass prompts (useful for testing). |
 
 ## Setup
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/langchain-agent.git
-cd langchain-agent
+1. **Clone the repository**
 
-# Create a virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+   ```bash
+   git clone https://github.com/yourusername/agent-memory-confirmation.git
+   cd agent-memory-confirmation
+   ```
 
-# Install dependencies
-pip install -r requirements.txt
+2. **Create a virtual environment**
 
-# Set your OpenAI API key
-export OPENAI_API_KEY="your_api_key_here"
-```
+   ```bash
+   python -m venv venv
+   source venv/bin/activate   # On Windows use `venv\Scripts\activate`
+   ```
 
-## Running the API
+3. **Install dependencies**
 
-```bash
-uvicorn app:app --reload
-```
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-The API exposes a single endpoint:
+4. **Set OpenAI API key**
 
-- `POST /chat`
-  - Body: `{ "session_id": "unique_session_id", "message": "Your message" }`
-  - Response: `{ "response": "Agent's reply" }`
+   ```bash
+   export OPENAI_API_KEY="your_api_key_here"   # On Windows use `set`
+   ```
 
-Each session is identified by `session_id`. The agent will store messages in the SQLite database and ask for confirmation before calling any tool.
+5. **Run the agent**
+
+   ```bash
+   python main.py
+   ```
+
+## Usage
+
+- Type any message to the agent.  
+- If the agent generates a response containing `ACTION: <name>`, it will ask for confirmation before proceeding.  
+- Type `exit` or `quit` to stop the program.
 
 ## Testing
+
+Run unit tests with:
 
 ```bash
 pytest
 ```
 
 The tests cover:
-- Memory persistence.
-- Confirmation wrapper logic.
-- End-to-end agent execution with mocked confirmation.
+- Persistence of messages in SQLite.
+- Extraction of actions from responses.
+- Confirmation logic (both manual and auto-confirm).
 
 ## Project Structure
 
 ```
-├── agent/
-│   ├── __init__.py
-│   ├── memory.py
-│   ├── tools.py
-│   └── confirmation_agent.py
-├── app.py
-├── tests/
-│   ├── test_memory.py
-│   ├── test_confirmation.py
-│   └── test_agent.py
+├── agent.py          # Main agent logic
+├── confirmation.py   # Confirmation utilities
+├── memory.py         # Persistent memory implementation
+├── main.py           # CLI entry point
+├── README.md
 ├── requirements.txt
-└── README.md
+└── tests/
+    ├── test_memory.py
+    └── test_confirmation.py
 ```
 
-## Extending
+## Extending the Agent
 
-- Add new tools by creating a `BaseTool` subclass in `agent/tools.py` and including it in the `tools` list in `confirmation_agent.py`.
-- Modify the confirmation logic by providing a custom `confirm_func` when calling `get_agent`.
+- Add new critical actions to `critical_actions` set in `confirmation.py`.
+- Implement actual execution logic in `SimpleAgent.process` where the placeholder comment indicates.
+- Adjust the prompt template to include more context or system messages.
 
-Enjoy building your own conversational agents!
+Enjoy building smarter agents!
