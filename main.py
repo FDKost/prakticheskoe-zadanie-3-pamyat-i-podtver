@@ -42,14 +42,14 @@ def process_input(state: Dict[str, Any]) -> Dict[str, Any]:
     if match:
         a = float(match.group(1))
         b = float(match.group(3))
-        return {"next": "calculator", "tool_args": (a, b)}
+        return {"next": "tools", "tool_args": (a, b)}
 
     # Default echo reply
     reply = f"Agent: Я получил сообщение: {user_input}"
     memory.add(thread_id, "assistant", reply)
     return {"output": reply}
 
-def calculator(state: Dict[str, Any]) -> Dict[str, Any]:
+def tools(state: Dict[str, Any]) -> Dict[str, Any]:
     # The tool node automatically receives the arguments via state["tool_args"]
     a, b = state["tool_args"]
     result = calculator_tool(a, b)
@@ -64,18 +64,50 @@ def response(state: Dict[str, Any]) -> Dict[str, Any]:
 def build_graph() -> Graph:
     graph = Graph()
     graph.add_node("process_input", process_input)
-    graph.add_node("calculator", calculator)
+    graph.add_node("tools", tools)
     graph.add_node("response", response)
-    graph.add_edge("process_input", "calculator")
+    graph.add_edge("process_input", "tools")
     graph.add_edge("process_input", "response")
-    graph.add_edge("calculator", "response")
+    graph.add_edge("tools", "response")
     return graph
+
+def ask_and_run(agent, user_input: str, config: Dict[str, Any], console: Console) -> bool:
+    """
+    Run the agent for a single turn, handling interrupts and confirmations.
+    Returns False if the user chooses to exit the conversation.
+    """
+    stream = agent.stream(user_input, config)
+    for chunk_type, chunk_data in stream:
+        if chunk_type == "__interrupt__":
+            # Check if the interrupt is for the tools node
+            state = chunk_data.get("state", {})
+            if state.get("next") == ("tools",):
+                confirm = Prompt.ask(
+                    "Agent: Вы хотите вызвать инструмент? (Y/N)",
+                    choices=["Y", "N"],
+                    default="N",
+                )
+                if confirm.upper() == "Y":
+                    # Resume after interrupt
+                    resume_stream = agent.stream(None, config)
+                    for r_type, r_data in resume_stream:
+                        if r_type == "output":
+                            console.print(r_data)
+                    return True
+                else:
+                    console.print("[yellow]Tool call cancelled. Exiting.[/yellow]")
+                    return False
+        elif chunk_type == "output":
+            console.print(chunk_data)
+            if chunk_data.strip().lower() == "goodbye!":
+                return False
+    return True
 
 def main() -> None:
     console = Console()
     global memory
     memory = MemorySaver()
-    agent = create_agent(build_graph, checkpointer=memory, interrupt_before=["calculator"])
+    agent = create_agent(build_graph, checkpointer=memory, interrupt_before=["tools"])
 
     thread_id = str(uuid.uuid4())
     config = {"thread_id": thread_id}
@@ -92,28 +124,9 @@ def main() -> None:
         if not user_input.strip():
             continue
 
-        # Stream the agent response
-        stream = agent.stream(user_input, config)
-        for chunk_type, chunk_data in stream:
-            if chunk_type == "__interrupt__":
-                # Prompt for confirmation
-                confirm = Prompt.ask(
-                    "Agent: Вы хотите вызвать инструмент? (Y/N)",
-                    choices=["Y", "N"],
-                    default="N",
-                )
-                if confirm.upper() == "Y":
-                    # Resume after interrupt
-                    resume_stream = agent.stream(None, config)
-                    for r_type, r_data in resume_stream:
-                        if r_type == "output":
-                            console.print(r_data)
-                    break
-                else:
-                    console.print("[yellow]Tool call cancelled. Exiting.[/yellow]")
-                    return
-            elif chunk_type == "output":
-                console.print(chunk_data)
+        continue_chat = ask_and_run(agent, user_input, config, console)
+        if not continue_chat:
+            break
 
         # Persist memory after each turn
         memory.save()
